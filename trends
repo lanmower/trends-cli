@@ -1,0 +1,61 @@
+#!/usr/bin/env node
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+
+async function fetchTrends(query) {
+  const tempScript = path.join(os.tmpdir(), `trends_${Date.now()}.js`);
+
+  const script = `
+const { fetchTrendsData } = require('./playwriter-trends.js');
+
+(async () => {
+  try {
+    const result = await fetchTrendsData('${query.replace(/'/g, "\\'")}', page);
+    console.log(JSON.stringify(result, null, 2));
+    process.exit(0);
+  } catch (err) {
+    console.error('Error:', err.message);
+    process.exit(1);
+  }
+})();
+`;
+
+  fs.writeFileSync(tempScript, script);
+
+  try {
+    const result = execSync(`playwriter "${tempScript}"`, {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    return JSON.parse(result);
+  } catch (err) {
+    throw new Error(`Playwriter execution failed: ${err.message}`);
+  } finally {
+    try {
+      fs.unlinkSync(tempScript);
+    } catch {}
+  }
+}
+
+const query = process.argv[2];
+if (!query) {
+  console.error('Usage: trends <query>');
+  console.error('Example: trends "artificial intelligence"');
+  console.error('');
+  console.error('Requirements:');
+  console.error('  - playwriter CLI installed (npm install -g @remorses/playwriter)');
+  console.error('  - Browser window open with playwriter extension active');
+  process.exit(1);
+}
+
+fetchTrends(query)
+  .then(result => {
+    console.log(JSON.stringify(result, null, 2));
+  })
+  .catch(err => {
+    console.error('Error:', err.message);
+    process.exit(1);
+  });
